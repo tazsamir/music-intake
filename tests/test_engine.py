@@ -72,3 +72,15 @@ shutil.copytree(src, dest, dirs_exist_ok=True)
     copied = config.library / "Dummy" / source.name
     assert copied.read_bytes() == b"owned audio"
     assert source.exists()
+
+
+def test_beets_database_is_stored_in_persistent_state(tmp_path: Path) -> None:
+    downloads = tmp_path / "downloads"
+    album = downloads / "Artist" / "Album"
+    album.mkdir(parents=True)
+    source = album / "01 - Artist - Song.flac"
+    source.write_bytes(b"audio")
+    config = Config(downloads, tmp_path / "library", tmp_path / "state" / "status.json", beet="true")
+    assert IntakeEngine(config).process_group(album, [source])
+    beets_config = (config.library / ".beets-config.yaml").read_text()
+    assert f"library: {tmp_path / 'state' / 'library.db'}" in beets_config

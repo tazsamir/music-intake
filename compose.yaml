@@ -7,6 +7,7 @@ services:
       DOWNLOADS_PATH: /downloads
       LIBRARY_PATH: /music
       STATUS_FILE: /state/status.json
+      PROCESSED_FILE: /state/processed.json
       SCAN_INTERVAL: ${SCAN_INTERVAL:-60}
       STABLE_OBSERVATIONS: ${STABLE_OBSERVATIONS:-3}
       PUID: ${PUID:-1000}

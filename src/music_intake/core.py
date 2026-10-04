@@ -26,6 +26,7 @@ class Config:
     status_file: Path
     beet: str = "beet"
     stable_observations: int = 2
+    processed_file: Path | None = None
 
 
 class StabilityTracker:
@@ -57,7 +58,27 @@ class IntakeEngine:
     def __init__(self, config: Config) -> None:
         self.config = config
         self.tracker = StabilityTracker(config.stable_observations)
-        self.processed: set[Path] = set()
+        self.processed_file = config.processed_file or config.status_file.with_name("processed.json")
+        self.processed = self._load_processed()
+
+    @staticmethod
+    def _fingerprint(path: Path) -> tuple[int, int]:
+        stat = path.stat()
+        return stat.st_size, stat.st_mtime_ns
+
+    def _load_processed(self) -> dict[Path, tuple[int, int]]:
+        try:
+            data = json.loads(self.processed_file.read_text())
+            return {Path(path): (values[0], values[1]) for path, values in data.items()}
+        except (FileNotFoundError, json.JSONDecodeError, OSError, TypeError, ValueError):
+            return {}
+
+    def _save_processed(self) -> None:
+        self.processed_file.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.processed_file.with_suffix(".tmp")
+        payload = {str(path): list(fingerprint) for path, fingerprint in self.processed.items()}
+        temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        temporary.replace(self.processed_file)
 
     def _write_status(self, status: str, **extra: object) -> None:
         self.config.status_file.parent.mkdir(parents=True, exist_ok=True)
@@ -69,8 +90,14 @@ class IntakeEngine:
         sources = list(files)
         self.config.library.mkdir(parents=True, exist_ok=True)
         beets_config = self.config.library / ".beets-config.yaml"
+        database = self.config.status_file.parent / "library.db"
         if not beets_config.exists():
-            beets_config.write_text(f"directory: {self.config.library}\nimport:\n  copy: yes\n  move: no\n")
+            beets_config.write_text(
+                f"directory: {self.config.library}\nlibrary: {database}\n"
+                "import:\n  copy: yes\n  move: no\n"
+            )
+        elif not any(line.startswith("library:") for line in beets_config.read_text().splitlines()):
+            beets_config.write_text(f"library: {database}\n" + beets_config.read_text())
         for autotag in (True, False):
             command = build_beet_command(self.config.beet, group, self.config.library, autotag=autotag)
             try:
@@ -91,12 +118,26 @@ class IntakeEngine:
             self._write_status("ok", message="downloads path does not exist", processed=0)
             return 0
         for path in sorted(self.config.downloads.rglob("*")):
-            if path.is_file() and is_supported_audio(path) and path not in self.processed:
-                groups.setdefault(path.parent, []).append(path)
+            if path.is_file() and is_supported_audio(path):
+                try:
+                    fingerprint = self._fingerprint(path)
+                except OSError:
+                    continue
+                if self.processed.get(path) != fingerprint:
+                    groups.setdefault(path.parent, []).append(path)
         completed = 0
         for group, files in groups.items():
-            if all(self.tracker.observe(path) for path in files) and self.process_group(group, files):
-                self.processed.update(files)
+            try:
+                stable = all(self.tracker.observe(path) for path in files)
+            except OSError:
+                continue
+            if stable and self.process_group(group, files):
+                for path in files:
+                    try:
+                        self.processed[path] = self._fingerprint(path)
+                    except OSError:
+                        pass
+                self._save_processed()
                 completed += 1
         return completed
 

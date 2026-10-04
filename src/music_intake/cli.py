@@ -17,6 +17,7 @@ def config_from_env(environment: Mapping[str, str] | None = None) -> tuple[Confi
         downloads=Path(env.get("DOWNLOADS_PATH", "/downloads")),
         library=Path(env.get("LIBRARY_PATH", "/music")),
         status_file=Path(env.get("STATUS_FILE", "/state/status.json")),
+        processed_file=Path(env.get("PROCESSED_FILE", "/state/processed.json")),
         beet=env.get("BEET_EXECUTABLE", "beet"),
         stable_observations=int(env.get("STABLE_OBSERVATIONS", "3")),
     )

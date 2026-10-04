@@ -29,12 +29,13 @@ DOWNLOADS_PATH=./downloads LIBRARY_PATH=./music STATUS_FILE=./state/status.json 
 | `DOWNLOADS_PATH` | `/downloads` | Read-only completed-download tree |
 | `LIBRARY_PATH` | `/music` | Beets-managed destination |
 | `STATUS_FILE` | `/state/status.json` | Atomic JSON status/health record |
+| `PROCESSED_FILE` | `/state/processed.json` | Persistent source-file fingerprints used to prevent repeat imports |
 | `SCAN_INTERVAL` | `60` | Seconds between scans |
 | `STABLE_OBSERVATIONS` | `3` | Consecutive unchanged scans required |
 | `PUID` / `PGID` | `1000` | Container process UID and GID |
 | `BEET_EXECUTABLE` | `beet` | Beets executable, mainly for testing |
 
-The download mount is read-only in Compose. Beets is configured with `copy: yes` and `move: no`; this app never deletes originals.
+The download mount is read-only in Compose. Beets is configured with `copy: yes` and `move: no`; this app never deletes originals. Its catalogue is stored at `/state/library.db`, while processed source fingerprints are stored at `/state/processed.json`, so restarting or recreating the container does not re-import unchanged downloads.
 
 ## Permissions and NFS
 
@@ -65,7 +66,7 @@ Use this only for media you own or are authorized to copy. It does not download 
 - Album grouping follows the immediate parent directory; poorly structured downloads may become separate imports.
 - Stability uses size and modification time across scans, not downloader-specific completion events.
 - Beets' quiet mode skips uncertain autotag matches; the fallback imports without autotagging and relies on filenames/tags.
-- Processed paths are remembered in memory for the current daemon run. Existing library content and Beets' database prevent normal duplicate copies, but replacing a source while the daemon runs requires a restart.
+- Processed paths, sizes, and modification times persist in the state directory. Unchanged downloads are skipped after daemon or container restarts; changed source files are eligible for import again.
 - Artwork and fingerprint lookup depend on Beets plugins and network/service availability; core intake remains local.
 
 ## Development
