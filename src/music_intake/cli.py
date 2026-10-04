@@ -13,11 +13,13 @@ from .core import Config, IntakeEngine
 
 def config_from_env(environment: Mapping[str, str] | None = None) -> tuple[Config, int]:
     env = os.environ if environment is None else environment
+    status_file = Path(env.get("STATUS_FILE", "/state/status.json"))
+    processed_file = Path(env["PROCESSED_FILE"]) if "PROCESSED_FILE" in env else status_file.with_name("processed.json")
     config = Config(
         downloads=Path(env.get("DOWNLOADS_PATH", "/downloads")),
         library=Path(env.get("LIBRARY_PATH", "/music")),
-        status_file=Path(env.get("STATUS_FILE", "/state/status.json")),
-        processed_file=Path(env.get("PROCESSED_FILE", "/state/processed.json")),
+        status_file=status_file,
+        processed_file=processed_file,
         beet=env.get("BEET_EXECUTABLE", "beet"),
         stable_observations=int(env.get("STABLE_OBSERVATIONS", "3")),
     )
